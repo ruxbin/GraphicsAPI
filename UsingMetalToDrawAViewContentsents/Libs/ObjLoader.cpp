@@ -30,6 +30,7 @@ typedef struct VertexWithAttribute
 
 
 static std::vector<VertexWithAttribute> _vertexBuffer;
+static std::vector<unsigned short> _indexBuffer;
 
 unsigned long getVertexSize()
 {
@@ -41,6 +42,16 @@ void * getRawVertexData()
     return static_cast<void*>(&_vertexBuffer[0]);
 }
 
+void * getRawIndexData()
+{
+    return static_cast<void*>(&_indexBuffer[0]);
+}
+
+unsigned long getIndexSize()
+{
+    return sizeof(unsigned short) * _indexBuffer.size();
+}
+
 void LoadObj(const char * filepath)
 {
     string path(filepath);
@@ -49,7 +60,7 @@ void LoadObj(const char * filepath)
         std::vector<vec3> normals;
         std::vector<vec2> uvs;
         //std::vector<Mesh> meshes;
-        std::vector<int> indexBuffer;
+        //std::vector<int> indexBuffer;
         std::ifstream in(path, std::ios::in);
         //std::vector<VertexWithAttribute> vertexBuffer;
         //std::string msg = "Failed to open file " + path;
@@ -61,7 +72,7 @@ void LoadObj(const char * filepath)
             float u,v;
             VertexWithAttribute vertex;
             float n_x,n_y,n_z;
-            int v1,v2,v3;
+            unsigned short v1,v2,v3;
             int vt1,vt2,vt3;
             int vn1,vn2,vn3;
             switch(line[0]){
@@ -100,7 +111,7 @@ void LoadObj(const char * filepath)
                     break;
                 case 'f':
 
-                    sscanf(line.c_str()+2,"%d/%d/%d %d/%d/%d %d/%d/%d",&v1,&vt1,&vn1,
+                    sscanf(line.c_str()+2,"%hu/%d/%d %hu/%d/%d %hu/%d/%d",&v1,&vt1,&vn1,
                                                                         &v2,&vt2,&vn2,
                                                                         &v3,&vt3,&vn3);
 
@@ -111,9 +122,9 @@ void LoadObj(const char * filepath)
                     _vertexBuffer[v3-1].normal = normals[vn3-1];
                     _vertexBuffer[v3-1].uv =uvs[vt3-1];
 
-                    indexBuffer.push_back(v1-1);
-                    indexBuffer.push_back(v2-1);
-                    indexBuffer.push_back(v3-1);
+                    _indexBuffer.push_back(v1-1);
+                    _indexBuffer.push_back(v2-1);
+                    _indexBuffer.push_back(v3-1);
 
                     break;
             }

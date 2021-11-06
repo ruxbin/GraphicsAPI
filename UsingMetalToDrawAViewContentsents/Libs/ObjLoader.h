@@ -18,7 +18,11 @@ void LoadObj(const char * filepath);
 
 unsigned long getVertexSize();
 
+unsigned long getIndexSize();
+
 void * getRawVertexData();
+
+void * getRawIndexData();
 
 #if defined __cplusplus
 }

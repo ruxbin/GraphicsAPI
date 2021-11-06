@@ -12,6 +12,8 @@ Implementation of a platform independent renderer class, which performs Metal se
 
 #include "ObjLoader.h"
 
+#include "Camera.hpp"
+
 // Main class performing the rendering
 @implementation AAPLRenderer
 {
@@ -21,8 +23,17 @@ Implementation of a platform independent renderer class, which performs Metal se
     id<MTLCommandQueue> _commandQueue;
     
     id<MTLBuffer> _vertexBuffer;
+    id<MTLBuffer> _indexBuffer;
+    
+    id<MTLBuffer> _cameraBuffer;
     
     id<MTLRenderPipelineState> _pipelineState;
+    
+    Camera * _camera;
+    
+    MTLCaptureManager* _captureManager;
+    
+    bool _captured;
     
 }
 
@@ -31,15 +42,22 @@ Implementation of a platform independent renderer class, which performs Metal se
 {
     self = [super init];
     NSError* error = nil;
+    //Camera(float fov,float n ,float f, vec3 origin,float aspect)
+    float aspectratio = mtkView.drawableSize.width/mtkView.drawableSize.height;
+    _camera = new Camera(60*3.1414926f/180.f,0.1,20,vec3(0,0,-15),aspectratio);
     if(self)
     {
         _device = mtkView.device;
+        
+        id<MTLLibrary> defaultLibrary = [_device newDefaultLibrary];
 
         // Create the command queue
         _commandQueue = [_device newCommandQueue];
         
         // Create all sorts of resource here
         _vertexBuffer = [_device newBufferWithBytes:getRawVertexData() length:getVertexSize() options:MTLResourceStorageModeShared];
+        _indexBuffer = [_device newBufferWithBytes:getRawIndexData() length:getIndexSize() options:MTLResourceStorageModeShared];
+        _cameraBuffer = [_device newBufferWithLength:sizeof(Camera) options:MTLResourceStorageModeShared];
         MTLVertexDescriptor * vd = [MTLVertexDescriptor vertexDescriptor];
         vd.attributes[0].format = MTLVertexFormatFloat3;
         vd.attributes[0].offset = 0;
@@ -58,10 +76,22 @@ Implementation of a platform independent renderer class, which performs Metal se
         vd.layouts[0].stride = sizeof(float)*3*2+sizeof(float)*2;
         ///
         MTLRenderPipelineDescriptor* pipeDesc = [[MTLRenderPipelineDescriptor alloc] init];
-        //pipeDesc.vertexFunction =;
-        //pipeDesc.fragmentFunction =;
+        pipeDesc.vertexFunction = [defaultLibrary newFunctionWithName:@"simpleVertexShader"];;
+        pipeDesc.fragmentFunction = [defaultLibrary newFunctionWithName:@"simpleFragmentShader"];;
         pipeDesc.vertexDescriptor = vd;
+        pipeDesc.colorAttachments[0].pixelFormat = mtkView.colorPixelFormat;
         _pipelineState = [_device newRenderPipelineStateWithDescriptor:pipeDesc error:&error];
+        
+        _captureManager = [MTLCaptureManager sharedCaptureManager];
+        
+        if (![_captureManager supportsDestination: MTLCaptureDestinationGPUTraceDocument])
+        {
+            NSLog(@"Capture to a GPU trace file is not supported");
+        }
+
+        
+        
+        _captured = false;
         
     }
 
@@ -79,14 +109,34 @@ Implementation of a platform independent renderer class, which performs Metal se
         return;
     }
 
+   
+    
+    if(!_captured)
+    {
+        MTLCaptureDescriptor* captureDescriptor = [[MTLCaptureDescriptor alloc] init];
+        captureDescriptor.captureObject = _device;
+        captureDescriptor.destination = MTLCaptureDestinationGPUTraceDocument;
+        captureDescriptor.outputURL = [NSURL URLWithString:@"capture.gputrace" relativeToURL:[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask ] lastObject]];
+        NSError *error;
+        if (![_captureManager startCaptureWithDescriptor: captureDescriptor error:&error])
+        {
+                NSLog(@"Failed to start capture, error %@", error);
+        }
+    }
+    
+    //set camera params
+    memcpy([_cameraBuffer contents],_camera->getProjectionMatrixData(),sizeof(mat4));
+    memcpy((char*)[_cameraBuffer contents]+sizeof(mat4),_camera->getObjectToCameraData(),sizeof(mat4));
+
     id<MTLCommandBuffer> commandBuffer = [_commandQueue commandBuffer];
     
     // Create a render pass and immediately end encoding, causing the drawable to be cleared
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
-    //[commandEncoder setRenderPipelineState:<#(nonnull id<MTLRenderPipelineState>)#>]
     
+    [commandEncoder setRenderPipelineState:_pipelineState];
     [commandEncoder setVertexBuffer:_vertexBuffer offset:0 atIndex:0];
-    
+    [commandEncoder setVertexBuffer:_cameraBuffer offset:0 atIndex:1];
+    [commandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:getIndexSize()/sizeof(unsigned short) indexType:MTLIndexTypeUInt16 indexBuffer:_indexBuffer indexBufferOffset:0];
     
     [commandEncoder endEncoding];
     
@@ -98,6 +148,12 @@ Implementation of a platform independent renderer class, which performs Metal se
     [commandBuffer presentDrawable:drawable];
     
     [commandBuffer commit];
+    if(!_captured)
+    {
+        [_captureManager stopCapture];
+        _captured = true;
+    }
+    
 }
 
 

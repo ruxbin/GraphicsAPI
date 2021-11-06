@@ -25,6 +25,7 @@
 		693C5C52272BEA8F00594D46 /* ObjLoader.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 693C5C51272BEA8F00594D46 /* ObjLoader.cpp */; };
 		693C5C57272BEDCC00594D46 /* edward.obj in Resources */ = {isa = PBXBuildFile; fileRef = 693C5C56272BEDCC00594D46 /* edward.obj */; };
 		693C5C59272C2C7100594D46 /* Standard.metal in Sources */ = {isa = PBXBuildFile; fileRef = 693C5C58272C2C7100594D46 /* Standard.metal */; };
+		69D341772736794B0040A908 /* Camera.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 69D341752736794B0040A908 /* Camera.cpp */; };
 		83E9F9A021ED16D900B393C1 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 83E9F99E21ED16D900B393C1 /* Metal.framework */; };
 		83E9F9A121ED16D900B393C1 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 83E9F99F21ED16D900B393C1 /* MetalKit.framework */; };
 		CF2B7FCD220B9FEB002847D1 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CF2B7FCB220B9FEB002847D1 /* MetalKit.framework */; };
@@ -54,6 +55,8 @@
 		693C5C54272BEBEE00594D46 /* Primitives.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Primitives.h; sourceTree = "<group>"; };
 		693C5C56272BEDCC00594D46 /* edward.obj */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = edward.obj; sourceTree = "<group>"; };
 		693C5C58272C2C7100594D46 /* Standard.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Standard.metal; sourceTree = "<group>"; };
+		69D341752736794B0040A908 /* Camera.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Camera.cpp; sourceTree = "<group>"; };
+		69D341762736794B0040A908 /* Camera.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Camera.hpp; sourceTree = "<group>"; };
 		83E9F98621ED168D00B393C1 /* MetalKitAndRenderingSetup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MetalKitAndRenderingSetup.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		83E9F99E21ED16D900B393C1 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		83E9F99F21ED16D900B393C1 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
@@ -159,6 +162,8 @@
 				693C5C51272BEA8F00594D46 /* ObjLoader.cpp */,
 				693C5C53272BEB9000594D46 /* Matrix.h */,
 				693C5C54272BEBEE00594D46 /* Primitives.h */,
+				69D341752736794B0040A908 /* Camera.cpp */,
+				69D341762736794B0040A908 /* Camera.hpp */,
 			);
 			path = Libs;
 			sourceTree = "<group>";
@@ -362,6 +367,7 @@
 			files = (
 				3A58E290222F7F1400072892 /* AAPLViewController.m in Sources */,
 				3A58E293222F7F1800072892 /* main.mm in Sources */,
+				69D341772736794B0040A908 /* Camera.cpp in Sources */,
 				3A58E295222F7F1E00072892 /* AAPLAppDelegate.m in Sources */,
 				3A58E28D222F7ECD00072892 /* AAPLRenderer.mm in Sources */,
 				693C5C59272C2C7100594D46 /* Standard.metal in Sources */,
