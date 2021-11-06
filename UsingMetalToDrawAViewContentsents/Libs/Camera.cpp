@@ -23,4 +23,6 @@ Camera::Camera(float fov,float n ,float f, vec3 origin,float aspect)
 {
     mat4 trans = translate(-origin.x,-origin.y,-origin.z);
     mat4 proj = perspective(fov, aspect, n, f);
+    _projectionMatrix = proj;
+    _objectToCameraMatrix = trans;
 }
