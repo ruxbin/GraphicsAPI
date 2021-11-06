@@ -40,12 +40,27 @@ Implementation of a platform independent renderer class, which performs Metal se
         
         // Create all sorts of resource here
         _vertexBuffer = [_device newBufferWithBytes:getRawVertexData() length:getVertexSize() options:MTLResourceStorageModeShared];
+        MTLVertexDescriptor * vd = [MTLVertexDescriptor vertexDescriptor];
+        vd.attributes[0].format = MTLVertexFormatFloat3;
+        vd.attributes[0].offset = 0;
+        vd.attributes[0].bufferIndex = 0;
         
+        vd.attributes[1].format = MTLVertexFormatFloat3;
+        vd.attributes[1].offset = sizeof(float)*3;
+        vd.attributes[1].bufferIndex = 0;
+        
+        vd.attributes[1].format = MTLVertexFormatFloat2;
+        vd.attributes[1].offset = sizeof(float)*3*2;
+        vd.attributes[1].bufferIndex = 0;
+        
+        vd.layouts[0].stepFunction =  MTLVertexStepFunctionPerVertex;//default
+        vd.layouts[0].stepRate = 1;//default
+        vd.layouts[0].stride = sizeof(float)*3*2+sizeof(float)*2;
         ///
         MTLRenderPipelineDescriptor* pipeDesc = [[MTLRenderPipelineDescriptor alloc] init];
         //pipeDesc.vertexFunction =;
         //pipeDesc.fragmentFunction =;
-        pipeDesc.vertexd
+        pipeDesc.vertexDescriptor = vd;
         _pipelineState = [_device newRenderPipelineStateWithDescriptor:pipeDesc error:&error];
         
     }
