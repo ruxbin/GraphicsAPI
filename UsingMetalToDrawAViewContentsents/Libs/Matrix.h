@@ -162,9 +162,9 @@ static mat4 perspective(float fovy, float aspect, float near, float far)
     float invtf = 1.0f / tan(fovy * 0.5f);
     m[0].x = invtf / aspect;
     m[1].y = invtf;
-    m[2].z = -(far + near) / (far - near);
-    m[2].w = -1.0f;
-    m[3].z = (-2.0f * far * near) / (far - near);
+    m[2].z = far / (far - near);
+    m[2].w = (-1.0f * far * near) / (far - near);
+    m[3].z = 1.0f;
     m[3].w = 0.0f;
     return m;
 }
@@ -336,14 +336,14 @@ static mat4 rotateZ(float rad)
 static mat4 translate(float x, float y, float z)
 {
     mat4 m(1.0f);
-    m[3][0] = x; m[3][1] = y; m[3][2] = z; m[3][3] = 1.0f;
+    m[0][3] = x; m[1][3] = y; m[2][3] = z; m[3][3] = 1.0f;
     return m;
 }
 
 static mat4 translate(const vec3 &v)
 {
     mat4 m(1.0f);
-    m[3][0] = v.x; m[3][1] = v.y; m[3][2] = v.z;
+    m[0][3] = v.x; m[1][3] = v.y; m[2][3] = v.z;
     return m;
 }
 
