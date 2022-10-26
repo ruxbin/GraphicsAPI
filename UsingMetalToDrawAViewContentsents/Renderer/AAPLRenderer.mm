@@ -67,9 +67,9 @@ Implementation of a platform independent renderer class, which performs Metal se
         vd.attributes[1].offset = sizeof(float)*3;
         vd.attributes[1].bufferIndex = 0;
         
-        vd.attributes[1].format = MTLVertexFormatFloat2;
-        vd.attributes[1].offset = sizeof(float)*3*2;
-        vd.attributes[1].bufferIndex = 0;
+        vd.attributes[2].format = MTLVertexFormatFloat2;
+        vd.attributes[2].offset = sizeof(float)*3*2;
+        vd.attributes[2].bufferIndex = 0;
         
         vd.layouts[0].stepFunction =  MTLVertexStepFunctionPerVertex;//default
         vd.layouts[0].stepRate = 1;//default
