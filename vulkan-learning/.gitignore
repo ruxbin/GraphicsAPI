@@ -1,0 +1,7 @@
+.vscode
+*.objdump
+*.symbol
+TestVulkan
+compile_commands.json
+*.dump
+*.spv
