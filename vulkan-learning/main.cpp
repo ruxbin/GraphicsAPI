@@ -32,7 +32,7 @@ const std::vector<const char*> deviceExtensions = {
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
 #else
-const bool enableValidationLayers = false;
+const bool enableValidationLayers = true;
 #endif
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
@@ -70,7 +70,7 @@ class HelloTriangleApplication {
 public:
     void run() {
 
-        LoadObj("../UsingMetalToDrawAViewContentsents/edward.obj");
+        LoadObj("../UsingMetalToDrawAViewContentsents/Resources/edward.obj");
 
         initWindow();
         initVulkan();
@@ -102,8 +102,6 @@ private:
     VkPipelineLayout pipelineLayout;
     VkPipeline graphicsPipeline;
 
-    VkPipeline edwardPipeline;
-
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
 
@@ -112,6 +110,18 @@ private:
     VkFence inFlightFence;
 
     Camera * maincamera;
+    VkBuffer vertexBuffer;
+    VkDeviceMemory vertexBufferMemory;
+    VkBuffer indexBuffer;
+    VkDeviceMemory indexBufferMemory;
+    VkBuffer uniformBuffer;
+    VkDeviceMemory uniformBufferMemory;
+    VkPipelineLayout epipelineLayout;
+    VkPipeline egraphicsPipeline;
+
+    VkDescriptorSetLayout globalSetLayout;
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSet globalDescriptor;
 
     void initWindow() {
         glfwInit();
@@ -129,14 +139,100 @@ private:
         pickPhysicalDevice();
         createLogicalDevice();
         createSwapChain();
+        createUniformBuffer();
+        init_descriptors();
         createImageViews();
         createRenderPass();
         createGraphicsPipeline();
         createFramebuffers();
         createCommandPool();
         createVertexBuffer();
+        createIndexBuffer();
         createCommandBuffer();
         createSyncObjects();
+    }
+
+    void init_descriptors()
+    {
+
+        //information about the binding.
+        VkDescriptorSetLayoutBinding camBufferBinding = {};
+        camBufferBinding.binding = 0;
+        camBufferBinding.descriptorCount = 1;
+        // it's a uniform buffer binding
+        camBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+
+        // we use it from the vertex shader
+        camBufferBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+
+        VkDescriptorSetLayoutCreateInfo setinfo = {};
+        setinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        setinfo.pNext = nullptr;
+
+        //we are going to have 1 binding
+        setinfo.bindingCount = 1;
+        //no flags
+        setinfo.flags = 0;
+        //point to the camera buffer binding
+        setinfo.pBindings = &camBufferBinding;
+
+        vkCreateDescriptorSetLayout(device, &setinfo, nullptr, &globalSetLayout);
+
+        // other code ....
+        //create a descriptor pool that will hold 10 uniform buffers
+        std::vector<VkDescriptorPoolSize> sizes =
+        {
+            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 }
+        };
+
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = 0;
+        pool_info.maxSets = 10;
+        pool_info.poolSizeCount = (uint32_t)sizes.size();
+        pool_info.pPoolSizes = sizes.data();
+
+        vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptorPool);
+
+        VkDescriptorSetAllocateInfo allocInfo ={};
+		allocInfo.pNext = nullptr;
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		//using the pool we just set
+		allocInfo.descriptorPool = descriptorPool;
+		//only 1 descriptor
+		allocInfo.descriptorSetCount = 1;
+		//using the global data layout
+		allocInfo.pSetLayouts = &globalSetLayout;
+
+		vkAllocateDescriptorSets(device, &allocInfo, &globalDescriptor);
+
+        //information about the buffer we want to point at in the descriptor
+		VkDescriptorBufferInfo binfo;
+		//it will be the camera buffer
+		binfo.buffer = uniformBuffer;
+		//at 0 offset
+		binfo.offset = 0;
+		//of the size of a camera data struct
+		binfo.range = sizeof(uniformBufferData);
+
+		VkWriteDescriptorSet setWrite = {};
+		setWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		setWrite.pNext = nullptr;
+
+		//we are going to write into binding number 0
+		setWrite.dstBinding = 0;
+		//of the global descriptor
+		setWrite.dstSet = globalDescriptor;
+
+		setWrite.descriptorCount = 1;
+		//and the type is uniform buffer
+		setWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		setWrite.pBufferInfo = &binfo;
+
+
+		vkUpdateDescriptorSets(device, 1, &setWrite, 0, nullptr);
+        
     }
 
     void mainLoop() {
@@ -149,11 +245,18 @@ private:
     }
 
     void cleanup() {
+        delete maincamera;
+
         vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
         vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
         vkDestroyFence(device, inFlightFence, nullptr);
 
         vkDestroyCommandPool(device, commandPool, nullptr);
+
+        vkDestroyBuffer(device,vertexBuffer,nullptr);
+        vkFreeMemory(device,vertexBufferMemory,nullptr);
+        vkDestroyBuffer(device,indexBuffer,nullptr);
+        vkFreeMemory(device,indexBufferMemory,nullptr);
 
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -173,6 +276,8 @@ private:
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
+        vkDestroyDescriptorSetLayout(device,globalSetLayout,nullptr);
+        vkDestroyDescriptorPool(device,descriptorPool,nullptr);
 
         vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
@@ -241,7 +346,21 @@ private:
     }
 
     void createSurface() {
-        if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+        VkResult res = glfwCreateWindowSurface(instance, window, nullptr, &surface);
+        if(res==VK_ERROR_INITIALIZATION_FAILED)
+        {
+            throw std::runtime_error("initialization failed");
+        }
+        else if(res==VK_ERROR_EXTENSION_NOT_PRESENT)
+        {
+            
+            throw std::runtime_error("extension not present");
+        }
+        else if(res==VK_ERROR_NATIVE_WINDOW_IN_USE_KHR)
+        {
+            throw std::runtime_error("native window in use");
+        }
+        if ( res!= VK_SUCCESS) {
             throw std::runtime_error("failed to create window surface!");
         }
     }
@@ -439,8 +558,15 @@ private:
         auto vertShaderCode = readFile("shaders/vert.spv");
         auto fragShaderCode = readFile("shaders/frag.spv");
 
+        auto evertShaderCode = readFile("shaders/edward.vert.spv");
+        auto efragShaderCode = readFile("shaders/edward.frag.spv");
+
+
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+        VkShaderModule evertShaderModule = createShaderModule(evertShaderCode);
+        VkShaderModule efragShaderModule = createShaderModule(efragShaderCode);
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -454,7 +580,20 @@ private:
         fragShaderStageInfo.module = fragShaderModule;
         fragShaderStageInfo.pName = "main";
 
+        VkPipelineShaderStageCreateInfo evertShaderStageInfo{};
+        evertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        evertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        evertShaderStageInfo.module = evertShaderModule;
+        evertShaderStageInfo.pName = "main";
+
+        VkPipelineShaderStageCreateInfo efragShaderStageInfo{};
+        efragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        efragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        efragShaderStageInfo.module = efragShaderModule;
+        efragShaderStageInfo.pName = "main";
+
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        VkPipelineShaderStageCreateInfo eshaderStages[] = {evertShaderStageInfo, efragShaderStageInfo};
 
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -524,6 +663,18 @@ private:
             throw std::runtime_error("failed to create pipeline layout!");
         }
 
+        VkPushConstantRange epushconstantRange = {.stageFlags=VK_SHADER_STAGE_VERTEX_BIT,.offset=0,.size=sizeof(mat4)};
+        VkPipelineLayoutCreateInfo epipelineLayoutInfo{};
+        epipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        epipelineLayoutInfo.setLayoutCount = 1;
+        epipelineLayoutInfo.pSetLayouts = &globalSetLayout;
+        epipelineLayoutInfo.pushConstantRangeCount = 1;
+        epipelineLayoutInfo.pPushConstantRanges = &epushconstantRange;
+
+        if (vkCreatePipelineLayout(device, &epipelineLayoutInfo, nullptr, &epipelineLayout) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create pipeline layout!");
+        }
+
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = 2;
@@ -554,29 +705,37 @@ private:
         };    
 
         VkPipelineVertexInputStateCreateInfo edwardVertexInputInfo{};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
-        vertexInputInfo.pVertexBindingDescriptions = &edwardInputBinding;
-        vertexInputInfo.vertexAttributeDescriptionCount = 3;
-        vertexInputInfo.pVertexAttributeDescriptions = edwardInputAttributes;
+        edwardVertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        edwardVertexInputInfo.vertexBindingDescriptionCount = 1;
+        edwardVertexInputInfo.pVertexBindingDescriptions = &edwardInputBinding;
+        edwardVertexInputInfo.vertexAttributeDescriptionCount = 3;
+        edwardVertexInputInfo.pVertexAttributeDescriptions = edwardInputAttributes;
 
         VkGraphicsPipelineCreateInfo edwardpipelineInfo{};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
-        pipelineInfo.pVertexInputState = &edwardVertexInputInfo;
-        pipelineInfo.pInputAssemblyState = &inputAssembly;
-        pipelineInfo.pViewportState = &viewportState;
-        pipelineInfo.pRasterizationState = &rasterizer;
-        pipelineInfo.pMultisampleState = &multisampling;
-        pipelineInfo.pColorBlendState = &colorBlending;
-        pipelineInfo.layout = pipelineLayout;
-        pipelineInfo.renderPass = renderPass;
-        pipelineInfo.subpass = 0;
-        pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+        edwardpipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        edwardpipelineInfo.stageCount = 2;
+        edwardpipelineInfo.pStages = eshaderStages;
+        edwardpipelineInfo.pVertexInputState = &edwardVertexInputInfo;
+        edwardpipelineInfo.pInputAssemblyState = &inputAssembly;
+        edwardpipelineInfo.pViewportState = &viewportState;
+        edwardpipelineInfo.pRasterizationState = &rasterizer;
+        edwardpipelineInfo.pMultisampleState = &multisampling;
+        edwardpipelineInfo.pColorBlendState = &colorBlending;
+        edwardpipelineInfo.layout = epipelineLayout;
+        edwardpipelineInfo.renderPass = renderPass;
+        edwardpipelineInfo.subpass = 0;
+        edwardpipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+
+        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &edwardpipelineInfo, nullptr, &egraphicsPipeline) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create edward graphics pipeline!");
+        }
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
+
+        vkDestroyShaderModule(device, evertShaderModule, nullptr);
+        vkDestroyShaderModule(device, efragShaderModule, nullptr);
     }
 
     void createFramebuffers() {
@@ -615,8 +774,100 @@ private:
         }
     }
 
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+        VkPhysicalDeviceMemoryProperties memProperties;
+        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+            if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        throw std::runtime_error("failed to find suitable memory type!");
+    }
+
     void createVertexBuffer() {
-        
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = getVertexSize();
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        bufferInfo.flags = 0;
+        if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create vertex buffer!");
+        }
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate vertex buffer memory!");
+        }
+        vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+        void* data;
+        vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+        memcpy(data, getRawVertexData(), (size_t) bufferInfo.size);
+        vkUnmapMemory(device, vertexBufferMemory);
+    }
+
+    struct uniformBufferData
+    {
+        mat4 projectionMatrix;
+    };
+
+    void createUniformBuffer(){
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = sizeof(uniformBufferData);
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        bufferInfo.flags = 0;
+        if (vkCreateBuffer(device, &bufferInfo, nullptr, &uniformBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create uniform buffer!");
+        }
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(device, uniformBuffer, &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (vkAllocateMemory(device, &allocInfo, nullptr, &uniformBufferMemory) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate uniform buffer memory!");
+        }
+        vkBindBufferMemory(device, uniformBuffer, uniformBufferMemory, 0);
+    }
+    void createIndexBuffer(){
+        VkBufferCreateInfo bufferInfo{};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = getIndexSize();
+        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        bufferInfo.flags = 0;
+        if (vkCreateBuffer(device, &bufferInfo, nullptr, &indexBuffer) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create index buffer!");
+        }
+        VkMemoryRequirements memRequirements;
+        vkGetBufferMemoryRequirements(device, indexBuffer, &memRequirements);
+
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = memRequirements.size;
+        allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if (vkAllocateMemory(device, &allocInfo, nullptr, &indexBufferMemory) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate vertex buffer memory!");
+        }
+        vkBindBufferMemory(device, indexBuffer, indexBufferMemory, 0);
+        void* data;
+        vkMapMemory(device, indexBufferMemory, 0, bufferInfo.size, 0, &data);
+        memcpy(data, getRawIndexData(), (size_t) bufferInfo.size);
+        vkUnmapMemory(device, indexBufferMemory);
     }
 
     void createCommandBuffer() {
@@ -656,6 +907,18 @@ private:
 
             vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
+            vkCmdBindPipeline(commandBuffer,VK_PIPELINE_BIND_POINT_GRAPHICS, egraphicsPipeline);
+            VkBuffer vertexBuffers[] = {vertexBuffer};
+            VkDeviceSize offsets[] = {0};
+
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+            vkCmdBindIndexBuffer(commandBuffer,indexBuffer,0,VK_INDEX_TYPE_UINT16);
+            //if the descriptor set data isn't change we can omit this?
+            vkCmdBindDescriptorSets(commandBuffer,VK_PIPELINE_BIND_POINT_GRAPHICS,epipelineLayout,0,1,&globalDescriptor,0,nullptr);
+            //if the constant isn't changed we can omit this?
+            vkCmdPushConstants(commandBuffer,epipelineLayout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(mat4),maincamera->getObjectToCameraData());
+            vkCmdDrawIndexed(commandBuffer,getIndexSize()/sizeof(unsigned short),1,0,0,0);
+
         vkCmdEndRenderPass(commandBuffer);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -685,6 +948,12 @@ private:
 
         uint32_t imageIndex;
         vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+
+        void* data;
+        vkMapMemory(device, uniformBufferMemory, 0, sizeof(uniformBufferData), 0, &data);
+        memcpy(data, maincamera->getProjectionMatrixData(), (size_t) sizeof(uniformBufferData));
+        vkUnmapMemory(device, uniformBufferMemory);
 
         vkResetCommandBuffer(commandBuffer, /*VkCommandBufferResetFlagBits*/ 0);
         recordCommandBuffer(commandBuffer, imageIndex);
@@ -864,10 +1133,16 @@ private:
     }
 
     std::vector<const char*> getRequiredExtensions() {
+        //uint32_t glfwExtensionCount = 2;
+        //const char* glfwExtensions[] = {"VK_KHR_surface","VK_KHR_wayland_surface"};
+        //version 2 -- renderdoc doesn't support wayland yet!
+        //https://github.com/baldurk/renderdoc/issues/853
         uint32_t glfwExtensionCount = 0;
-        const char** glfwExtensions;
-        glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
+        const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+        // FILE * logfile = fopen("/home/songjiang/glfwlog.txt","a");
+        // for(int i=0;i<glfwExtensionCount;++i)
+        //     fprintf(logfile,"%s\n",glfwExtensions[i]);
+        // fclose(logfile);
         std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
         if (enableValidationLayers) {
