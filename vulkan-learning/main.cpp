@@ -73,6 +73,7 @@ struct SwapChainSupportDetails {
 class HelloTriangleApplication {
 public:
     void run() {
+        modelScale = 1.f;
 
         LoadObj("../UsingMetalToDrawAViewContentsents/Resources/edward.obj");
 
@@ -134,6 +135,8 @@ private:
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
+
+    float modelScale;
 
     void initWindow() {
         
@@ -312,7 +315,7 @@ private:
         xcb_generic_event_t *event;
         xcb_client_message_event_t *cm;
 
-        while ((event = xcb_wait_for_event (connection))) {
+        while (running && (event = xcb_wait_for_event (connection))) {
            
 
             switch (event->response_type & ~0x80) {
@@ -333,7 +336,14 @@ private:
                 //print_modifiers(kp->state);
 
                 printf ("Key pressed in window %d\n",
-                        kp->event);
+                        kp->detail);
+                if(kp->detail==39)
+                {
+                    modelScale-=0.1;
+                    if(modelScale<0)
+                        modelScale = 1;
+                }
+                drawFrame();
                 break;
             }
             }
@@ -958,6 +968,16 @@ private:
         rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
         rasterizer.depthBiasEnable = VK_FALSE;
 
+        VkPipelineRasterizationStateCreateInfo rasterizer_wireframe{};
+        rasterizer_wireframe.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizer_wireframe.depthClampEnable = VK_FALSE;
+        rasterizer_wireframe.rasterizerDiscardEnable = VK_FALSE;
+        rasterizer_wireframe.polygonMode = VK_POLYGON_MODE_LINE;
+        rasterizer_wireframe.lineWidth = 1.0f;
+        rasterizer_wireframe.cullMode = VK_CULL_MODE_NONE;
+        rasterizer_wireframe.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizer_wireframe.depthBiasEnable = VK_FALSE;
+
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
@@ -1061,7 +1081,7 @@ private:
         edwardpipelineInfo.pVertexInputState = &edwardVertexInputInfo;
         edwardpipelineInfo.pInputAssemblyState = &inputAssembly;
         edwardpipelineInfo.pViewportState = &viewportState;
-        edwardpipelineInfo.pRasterizationState = &rasterizer;
+        edwardpipelineInfo.pRasterizationState = &rasterizer_wireframe;
         edwardpipelineInfo.pMultisampleState = &multisampling;
         edwardpipelineInfo.pColorBlendState = &colorBlending;
         edwardpipelineInfo.layout = epipelineLayout;
@@ -1263,7 +1283,7 @@ private:
             //if the descriptor set data isn't change we can omit this?
             vkCmdBindDescriptorSets(commandBuffer,VK_PIPELINE_BIND_POINT_GRAPHICS,epipelineLayout,0,1,&globalDescriptor,0,nullptr);
             //if the constant isn't changed we can omit this?
-            mat4 scaleM = scale(0.1f);
+            mat4 scaleM = scale(modelScale);
             mat4 withScale = maincamera->getObjectToCamera() * scaleM;
             vkCmdPushConstants(commandBuffer,epipelineLayout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(mat4),withScale.value_ptr());
             vkCmdDrawIndexed(commandBuffer,getIndexSize()/sizeof(unsigned short),1,0,0,0);
