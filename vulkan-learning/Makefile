@@ -2,7 +2,7 @@ TestVulkan : main.cpp vert.spv frag.spv libSupport.so edward.vert.spv edward.fra
 	g++ -g -O0 $< -L. -lxcb -lvulkan -lSupport -o $@
 
 
-CXXFLAGS=-fPIC -g -O0
+CXXFLAGS=-fPIC -g -O0 -std=c++11
 CFLAGS=-g -O0
 
 libsrcs=$(wildcard ../UsingMetalToDrawAViewContentsents/Libs/*.cpp)

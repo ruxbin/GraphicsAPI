@@ -22,6 +22,7 @@ public:
     Camera(float fov,float n ,float f, vec3 origin,float aspect);
     void * getProjectionMatrixData();
     void * getObjectToCameraData();
+    mat4 & getObjectToCamera();
 };
 
 #endif /* Camera_hpp */

@@ -18,6 +18,10 @@ void* Camera::getObjectToCameraData()
     return _objectToCameraMatrix.value_ptr();
 }
 
+mat4& Camera::getObjectToCamera()
+{
+    return _objectToCameraMatrix;
+}
 
 Camera::Camera(float fov,float n ,float f, vec3 origin,float aspect)
 {
