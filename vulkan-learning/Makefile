@@ -1,5 +1,5 @@
 TestVulkan : main.cpp vert.spv frag.spv libSupport.so edward.vert.spv edward.frag.spv
-	g++ -g -O0 $< -lglfw -L. -lvulkan -lSupport -o $@
+	g++ -g -O0 $< -L. -lxcb -lvulkan -lSupport -o $@
 
 
 CXXFLAGS=-fPIC -g -O0

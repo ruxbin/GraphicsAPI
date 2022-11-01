@@ -1,5 +1,8 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#define VK_USE_PLATFORM_XCB_KHR
+#include <vulkan/vulkan.h>
+#include <xcb/xcb.h>
+#include <vulkan/vulkan_xcb.h>
+
 
 #include <iostream>
 #include <fstream>
@@ -79,7 +82,11 @@ public:
     }
 
 private:
-    GLFWwindow* window;
+    xcb_connection_t * connection;
+    xcb_window_t window;
+    xcb_screen_t * screen;
+    xcb_atom_t wmProtocols;
+    xcb_atom_t wmDeleteWin;
 
     VkInstance instance;
     VkDebugUtilsMessengerEXT debugMessenger;
@@ -124,12 +131,69 @@ private:
     VkDescriptorSet globalDescriptor;
 
     void initWindow() {
-        glfwInit();
+        
+        int screenp = 0;
+        connection = xcb_connect(NULL, &screenp);
+        if (xcb_connection_has_error(connection))
+        {
+            printf("Failed to connect to X server using XCB.");
+            exit(1);
+        }
+        
+        xcb_screen_iterator_t iter =
+        xcb_setup_roots_iterator(xcb_get_setup(connection));
 
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        for (int s = screenp; s > 0; s--)
+            xcb_screen_next(&iter);
+        screen = iter.data;
 
-        window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+        window = xcb_generate_id(connection);
+        uint32_t eventMask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+        uint32_t valueList[] = { screen->black_pixel, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS |
+                              XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_POINTER_MOTION |
+                              XCB_EVENT_MASK_ENTER_WINDOW | XCB_EVENT_MASK_LEAVE_WINDOW |
+                              XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE };
+        xcb_create_window(
+            connection,
+            XCB_COPY_FROM_PARENT,
+            window,
+            screen->root,
+            0,
+            0,
+            WIDTH,
+            HEIGHT,
+            3,//border
+            XCB_WINDOW_CLASS_INPUT_OUTPUT,
+            screen->root_visual,
+            eventMask,
+            valueList);
+
+        xcb_change_property(
+            connection,
+            XCB_PROP_MODE_REPLACE,
+            window,
+            XCB_ATOM_WM_NAME,
+            XCB_ATOM_STRING,
+            8,
+            strlen("VulkanTest"),
+            "VulkanTest");
+        
+        xcb_intern_atom_cookie_t wmDeleteCookie = xcb_intern_atom(
+            connection, 0, strlen("WM_DELETE_WINDOW"), "WM_DELETE_WINDOW");
+        xcb_intern_atom_cookie_t wmProtocolsCookie =
+            xcb_intern_atom(connection, 0, strlen("WM_PROTOCOLS"), "WM_PROTOCOLS");
+        xcb_intern_atom_reply_t *wmDeleteReply =
+            xcb_intern_atom_reply(connection, wmDeleteCookie, NULL);
+        xcb_intern_atom_reply_t *wmProtocolsReply =
+            xcb_intern_atom_reply(connection, wmProtocolsCookie, NULL);
+        wmDeleteWin = wmDeleteReply->atom;
+        wmProtocols = wmProtocolsReply->atom;
+
+        xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window,
+                            wmProtocolsReply->atom, 4, 32, 1, &wmDeleteReply->atom);
+
+        xcb_map_window(connection, window);
+        xcb_flush(connection);
     }
 
     void initVulkan() {
@@ -236,10 +300,37 @@ private:
     }
 
     void mainLoop() {
-        while (!glfwWindowShouldClose(window)) {
-            glfwPollEvents();
-            drawFrame();
+
+        bool running = true;
+        xcb_generic_event_t *event;
+        xcb_client_message_event_t *cm;
+
+        while ((event = xcb_wait_for_event (connection))) {
+           
+
+            switch (event->response_type & ~0x80) {
+            case XCB_CLIENT_MESSAGE: {
+                cm = (xcb_client_message_event_t *)event;
+
+                if (cm->data.data32[0] == wmDeleteWin)
+                running = false;
+
+                break;
+            }
+            case XCB_EXPOSE:{
+                drawFrame();
+                break;
+            }
+            }
+            
+
+            free(event);
+
+            //drawFrame();
         }
+
+    xcb_destroy_window(connection, window);
+
 
         vkDeviceWaitIdle(device);
     }
@@ -257,6 +348,8 @@ private:
         vkFreeMemory(device,vertexBufferMemory,nullptr);
         vkDestroyBuffer(device,indexBuffer,nullptr);
         vkFreeMemory(device,indexBufferMemory,nullptr);
+        vkDestroyBuffer(device,uniformBuffer,nullptr);
+        vkFreeMemory(device,uniformBufferMemory,nullptr);
 
         for (auto framebuffer : swapChainFramebuffers) {
             vkDestroyFramebuffer(device, framebuffer, nullptr);
@@ -264,6 +357,8 @@ private:
 
         vkDestroyPipeline(device, graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        vkDestroyPipeline(device,egraphicsPipeline,nullptr);
+        vkDestroyPipelineLayout(device,epipelineLayout,nullptr);
         vkDestroyRenderPass(device, renderPass, nullptr);
 
         for (auto imageView : swapChainImageViews) {
@@ -271,20 +366,21 @@ private:
         }
 
         vkDestroySwapchainKHR(device, swapChain, nullptr);
-        vkDestroyDevice(device, nullptr);
-
+        
         if (enableValidationLayers) {
             DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
         }
         vkDestroyDescriptorSetLayout(device,globalSetLayout,nullptr);
+        //vkFreeDescriptorSets(device,descriptorPool,1,&globalDescriptor);
         vkDestroyDescriptorPool(device,descriptorPool,nullptr);
-
+        
+        vkDestroyDevice(device, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
 
-        glfwDestroyWindow(window);
+        
 
-        glfwTerminate();
+        //glfwTerminate();
     }
 
     void createInstance() {
@@ -346,7 +442,14 @@ private:
     }
 
     void createSurface() {
-        VkResult res = glfwCreateWindowSurface(instance, window, nullptr, &surface);
+        VkXcbSurfaceCreateInfoKHR surfaceCreatInfo = {
+            .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+            .pNext = nullptr,
+            .connection = connection,
+            .window = window
+        };
+        VkResult res = vkCreateXcbSurfaceKHR(instance, &surfaceCreatInfo, nullptr, &surface);
+        
         if(res==VK_ERROR_INITIALIZATION_FAILED)
         {
             throw std::runtime_error("initialization failed");
@@ -1031,9 +1134,10 @@ private:
         if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
             return capabilities.currentExtent;
         } else {
-            int width, height;
-            glfwGetFramebufferSize(window, &width, &height);
-
+            //int width, height;
+            //glfwGetFramebufferSize(window, &width, &height);
+            int width = WIDTH;
+            int height = HEIGHT;
             VkExtent2D actualExtent = {
                 static_cast<uint32_t>(width),
                 static_cast<uint32_t>(height)
@@ -1133,17 +1237,11 @@ private:
     }
 
     std::vector<const char*> getRequiredExtensions() {
-        //uint32_t glfwExtensionCount = 2;
-        //const char* glfwExtensions[] = {"VK_KHR_surface","VK_KHR_wayland_surface"};
-        //version 2 -- renderdoc doesn't support wayland yet!
-        //https://github.com/baldurk/renderdoc/issues/853
-        uint32_t glfwExtensionCount = 0;
-        const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-        // FILE * logfile = fopen("/home/songjiang/glfwlog.txt","a");
-        // for(int i=0;i<glfwExtensionCount;++i)
-        //     fprintf(logfile,"%s\n",glfwExtensions[i]);
-        // fclose(logfile);
-        std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+        uint32_t ExtensionCount = 2;
+        const char* Extensions[] = {"VK_KHR_surface","VK_KHR_xcb_surface"};
+        
+    
+        std::vector<const char*> extensions(Extensions, Extensions + ExtensionCount);
 
         if (enableValidationLayers) {
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
