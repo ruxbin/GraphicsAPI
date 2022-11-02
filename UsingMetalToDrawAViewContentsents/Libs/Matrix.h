@@ -359,4 +359,30 @@ static mat4 scale(float s)
     return scale(s, s, s);
 }
 
+
+static mat4 transpose(const mat4& input)
+{
+    mat4 m(1.0f);
+    m.x.x = input.x.x;
+    m.x.y = input.y.x;
+    m.x.z = input.z.x;
+    m.x.w = input.w.x;
+
+    m.y.x = input.x.y;
+    m.y.y = input.y.y;
+    m.y.z = input.z.y;
+    m.y.w = input.w.y;
+
+    m.z.x = input.x.z;
+    m.z.y = input.y.z;
+    m.z.z = input.z.z;
+    m.z.w = input.w.z;
+
+    m.w.x = input.x.w;
+    m.w.y = input.y.w;
+    m.w.z = input.z.w;
+    m.w.w = input.w.w;
+    return m;
+}
+
 #endif

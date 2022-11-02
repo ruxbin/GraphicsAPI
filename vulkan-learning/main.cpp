@@ -757,7 +757,7 @@ private:
         VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
         VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
-        maincamera = new Camera(60*3.1414926f/180.f,0.1,400,vec3(0,0,-200),extent.width/float(extent.height));
+        maincamera = new Camera(60*3.1414926f/180.f,0.1,100,vec3(0,0,-2),extent.width/float(extent.height));
 
         uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
         if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
@@ -972,7 +972,7 @@ private:
         rasterizer_wireframe.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterizer_wireframe.depthClampEnable = VK_FALSE;
         rasterizer_wireframe.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer_wireframe.polygonMode = VK_POLYGON_MODE_LINE;
+        rasterizer_wireframe.polygonMode = VK_POLYGON_MODE_FILL;
         rasterizer_wireframe.lineWidth = 1.0f;
         rasterizer_wireframe.cullMode = VK_CULL_MODE_NONE;
         rasterizer_wireframe.frontFace = VK_FRONT_FACE_CLOCKWISE;
@@ -1284,7 +1284,7 @@ private:
             vkCmdBindDescriptorSets(commandBuffer,VK_PIPELINE_BIND_POINT_GRAPHICS,epipelineLayout,0,1,&globalDescriptor,0,nullptr);
             //if the constant isn't changed we can omit this?
             mat4 scaleM = scale(modelScale);
-            mat4 withScale = maincamera->getObjectToCamera() * scaleM;
+            mat4 withScale = transpose(maincamera->getObjectToCamera()) * scaleM;
             vkCmdPushConstants(commandBuffer,epipelineLayout,VK_SHADER_STAGE_VERTEX_BIT,0,sizeof(mat4),withScale.value_ptr());
             vkCmdDrawIndexed(commandBuffer,getIndexSize()/sizeof(unsigned short),1,0,0,0);
 
@@ -1321,7 +1321,7 @@ private:
 
         void* data;
         vkMapMemory(device, uniformBufferMemory, 0, sizeof(uniformBufferData), 0, &data);
-        memcpy(data, maincamera->getProjectionMatrixData(), (size_t) sizeof(uniformBufferData));
+        memcpy(data, transpose(maincamera->getProjectMatrix()).value_ptr(), (size_t) sizeof(uniformBufferData));
         vkUnmapMemory(device, uniformBufferMemory);
 
         vkResetCommandBuffer(commandBuffer, /*VkCommandBufferResetFlagBits*/ 0);

@@ -9,6 +9,7 @@ layout (set=0,binding=0 )uniform camera
     mat4 projectionMatrix;
 } Camera;
 
+layout(location = 0) out vec3 fragColor;
 
 //push constants block
 layout( push_constant ) uniform constants
@@ -20,6 +21,6 @@ void main() {
     mat4 finalMatrix = Camera.projectionMatrix * PushConstants.objectToCameraMatrix;
     vec4 pos1=vec4(position,1.0);
     gl_Position = finalMatrix * pos1;
-    //fragColor = colors[gl_VertexIndex];
+    fragColor = vec3(uv,0);
     //
 }

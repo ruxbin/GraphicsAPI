@@ -23,6 +23,7 @@ public:
     void * getProjectionMatrixData();
     void * getObjectToCameraData();
     mat4 & getObjectToCamera();
+    mat4 & getProjectMatrix();
 };
 
 #endif /* Camera_hpp */
