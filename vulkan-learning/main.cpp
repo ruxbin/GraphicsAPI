@@ -75,7 +75,7 @@ public:
     void run() {
         modelScale = 1.f;
 
-        LoadObj("../UsingMetalToDrawAViewContentsents/Resources/edward.obj");
+        LoadObj("/home/songjiang/SOURCE/GraphicsAPI/UsingMetalToDrawAViewContentsents/Resources/edward.obj");
 
         initWindow();
         initVulkan();
@@ -335,14 +335,26 @@ private:
                 xcb_key_press_event_t *kp = (xcb_key_press_event_t *)event;
                 //print_modifiers(kp->state);
 
-                printf ("Key pressed in window %d\n",
+                /*printf ("Key pressed in window %d\n",
                         kp->detail);
-                if(kp->detail==39)
+                if(kp->detail==39)//s
                 {
                     modelScale-=0.1;
                     if(modelScale<0)
                         modelScale = 1;
-                }
+                }*/
+		const float movedelta = 1.f;
+		switch(kp->detail)
+		{
+			case 25:maincamera->MoveUp(movedelta);break;//w
+			case 38:maincamera->MoveLeft(movedelta);break;//a
+			case 39:maincamera->MoveDown(movedelta);break;//s
+			case 40:maincamera->MoveRight(movedelta);break;//d
+			case 41:maincamera->MoveForward(movedelta);break;//f
+			case 42:maincamera->MoveBackward(movedelta);break;//g
+			default:printf("Key pressed in window %d\n",kp->detail);break;
+		}
+
                 drawFrame();
                 break;
             }
